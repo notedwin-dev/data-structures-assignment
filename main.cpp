@@ -28,8 +28,60 @@ class Node {
 // Linked list class to implement a singly linked list
 class Linkedlist {
 
+private:
+    // Merge two sorted linked lists
+    Node* sortedMerge(Node *a, Node *b) {
+        if (!a) return b;
+        if (!b) return a;
+
+        Node *result = NULL;
+
+        // Compare strings lexicographically
+        if (a->data <= b->data) {
+            result = a;
+            result->next = sortedMerge(a->next, b);
+        } else {
+            result = b;
+            result->next = sortedMerge(a, b->next);
+        }
+        return result;
+    }
+     void frontBackSplit(Node *source, Node **frontRef, Node **backRef) {
+        Node *slow = source;
+        Node *fast = source->next;
+
+        // Advance 'fast' two nodes, and 'slow' one node
+        while (fast) {
+            fast = fast->next;
+            if (fast) {
+                slow = slow->next;
+                fast = fast->next;
+            }
+        }
+
+        *frontRef = source;
+        *backRef = slow->next;
+        slow->next = NULL;
+    }
+
+    // Recursive merge sort function
+    Node* mergeSortRecursive(Node *h) {
+        if (!h || !h->next) return h; // Base case
+
+        Node *a, *b;
+        frontBackSplit(h, &a, &b);
+
+        a = mergeSortRecursive(a);
+        b = mergeSortRecursive(b);
+
+        return sortedMerge(a, b);
+    }
+
 
   public:
+      void mergeSort() {
+        head = mergeSortRecursive(head);
+    }
     // Default constructor
     Node *head;
     Linkedlist() {
@@ -94,6 +146,7 @@ string filename("resume.csv");
 //string cvrows[100];
   //std::vector<std::vector<std::string>> csvRows;
 Linkedlist llj;
+//llj.print();
 Linkedlist llr;
 int j=0;
   while(getline(input2,line2)){
@@ -106,6 +159,7 @@ int j=0;
 
 
   }
+  llj.mergeSort();
 int k=0;
   while(getline(input,line)){
      // llj.insertAtHead(line);
@@ -117,7 +171,8 @@ int k=0;
 
 
   }
-cout<<"how many records"<< k<<endl;
+  llr.mergeSort();
+//cout<<"how many records"<< k<<endl;
   // Print out our table
 
  //llr.print();
@@ -135,7 +190,7 @@ void find(Linkedlist llr,Linkedlist llj){
   Node *ptr=llr.head;
   while(ptr->next!=NULL){
     string resumeLine=ptr->data;
-
+cout << "matching records:" << endl;
 
   Node *ptr2=llj.head;
    while(ptr2->next!=NULL){
@@ -191,7 +246,7 @@ if (present==true){
     ptr2=ptr2->next;
   }
 
-
+cout << "next job list" << endl;
 
  ptr=ptr->next;
 
