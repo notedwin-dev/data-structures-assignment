@@ -4,17 +4,14 @@
 using namespace std;
 
 int main() {
-    cout << "===== JOB MATCHING COMPONENT =====\n";
+    cout << "===== JOB MATCHING COMPONENT =====\n\n";
 
-    ArrayList arrayImpl;
-    LinkedList linkedImpl;
+    ArrayList arrayMatch;
+    arrayMatch.runMatching();
 
-    string jobFile = "job_description.csv";
-    string resumeFile = "resume.csv";
+    LinkedList linkedMatch;
+    linkedMatch.runMatching();
 
-    arrayImpl.runMatching(jobFile, resumeFile, 200);   // Array version
-    linkedImpl.runMatching(jobFile, resumeFile, 200);  // Linked list version
-
-    cout << "\n===== PROGRAM COMPLETED SUCCESSFULLY =====\n";
+    cout << "===== PROGRAM COMPLETED SUCCESSFULLY =====\n";
     return 0;
 }

@@ -3,18 +3,17 @@
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <cctype>
 using namespace std;
 
-struct Node {
-    string description;
-    Node* next;
-    Node(string desc) : description(desc), next(nullptr) {}
-};
+#define MAX_RECORDS 200
+#define MAX_WORDS 200
+#define MAX_WORD_LENGTH 50
 
-struct LMatch {
-    int resumeIndex;
-    int jobIndex;
-    int score;
+struct Node {
+    string data;
+    Node* next;
+    Node(string val) : data(val), next(nullptr) {}
 };
 
 class LinkedList {
@@ -22,122 +21,149 @@ private:
     Node* head;
     int size;
 
-    int getMatchScore(const string& job, const string& resume) {
-        int score = 0;
-        stringstream ss(resume);
-        string word;
-        while (ss >> word) {
-            string jobLower = job, wordLower = word;
-            for (auto &c : jobLower) c = tolower(c);
-            for (auto &c : wordLower) c = tolower(c);
-            if (jobLower.find(wordLower) != string::npos)
-                score++;
-        }
-        return score;
-    }
-
-    void sortMatches(LMatch arr[], int n) {
-        for (int i = 0; i < n - 1; i++) {
-            for (int j = 0; j < n - i - 1; j++) {
-                if (arr[j].score < arr[j + 1].score) {
-                    LMatch temp = arr[j];
-                    arr[j] = arr[j + 1];
-                    arr[j + 1] = temp;
-                }
-            }
-        }
-    }
-
 public:
     LinkedList() : head(nullptr), size(0) {}
 
-    void insert(string value) {
+    ~LinkedList() {
+        Node* curr = head;
+        while (curr) {
+            Node* temp = curr;
+            curr = curr->next;
+            delete temp;
+        }
+    }
+
+    void insert(const string& value) {
         Node* newNode = new Node(value);
         if (!head) head = newNode;
         else {
-            Node* temp = head;
-            while (temp->next) temp = temp->next;
-            temp->next = newNode;
+            Node* curr = head;
+            while (curr->next) curr = curr->next;
+            curr->next = newNode;
         }
         size++;
     }
 
-    Node* getHead() { return head; }
-    int getSize() { return size; }
-
-    void display(int limit = 10) {
-        Node* temp = head;
+    string get(int index) const {
+        Node* curr = head;
         int count = 0;
-        while (temp && count < limit) {
-            cout << "[" << count + 1 << "] " << temp->description << endl;
-            temp = temp->next;
+        while (curr) {
+            if (count == index) return curr->data;
+            curr = curr->next;
             count++;
         }
-        cout << "Total Records: " << size << endl;
+        return "";
     }
 
-    // ========== Matching Logic ==========
-    void runMatching(const string& jobFilePath, const string& resumeFilePath, int maxRecords = 200) {
-        cout << "\n==============================\n";
+    int getSize() const { return size; }
+
+    // Lowercase converter
+    string toLowercase(const string& str) {
+        string result = str;
+        for (int i = 0; result[i]; i++)
+            result[i] = tolower(result[i]);
+        return result;
+    }
+
+    // Tokenizer
+    int tokenize(const string& text, string words[MAX_WORDS]) {
+        string word = "";
+        int count = 0;
+        for (int i = 0; i <= text.length(); i++) {
+            char c = text[i];
+            if (isalnum(c)) word += tolower(c);
+            else if (!word.empty()) {
+                words[count++] = word;
+                word = "";
+                if (count >= MAX_WORDS) break;
+            }
+        }
+        if (!word.empty() && count < MAX_WORDS) words[count++] = word;
+        return count;
+    }
+
+    int getMatchScore(const string& job, const string& resume) {
+        string jobWords[MAX_WORDS];
+        string resumeWords[MAX_WORDS];
+        int jobCount = tokenize(job, jobWords);
+        int resCount = tokenize(resume, resumeWords);
+
+        int score = 0;
+        for (int i = 0; i < resCount; i++) {
+            for (int j = 0; j < jobCount; j++) {
+                if (resumeWords[i] == jobWords[j]) score++;
+            }
+        }
+        return score;
+    }
+
+    void runMatching() {
+        cout << "==============================\n";
         cout << "LINKED LIST–BASED MATCHING STARTED\n";
         cout << "==============================\n";
 
-        LinkedList jobList;
-        LinkedList resumeList;
-        string line;
+        LinkedList jobs;
+        LinkedList resumes;
 
-        ifstream jobFile(jobFilePath);
-        while (getline(jobFile, line) && jobList.getSize() < maxRecords) {
-            if (!line.empty()) jobList.insert(line);
+        ifstream jobFile("job_description.csv");
+        string line;
+        while (getline(jobFile, line) && jobs.getSize() < MAX_RECORDS) {
+            if (!line.empty()) jobs.insert(toLowercase(line));
         }
         jobFile.close();
 
-        ifstream resumeFile(resumeFilePath);
-        while (getline(resumeFile, line) && resumeList.getSize() < maxRecords) {
-            if (!line.empty()) resumeList.insert(line);
+        ifstream resumeFile("resume.csv");
+        while (getline(resumeFile, line) && resumes.getSize() < MAX_RECORDS) {
+            if (!line.empty()) resumes.insert(toLowercase(line));
         }
         resumeFile.close();
 
-        cout << "Jobs loaded: " << jobList.getSize() << endl;
-        cout << "Resumes loaded: " << resumeList.getSize() << endl;
+        cout << "Jobs loaded: " << jobs.getSize() << endl;
+        cout << "Resumes loaded: " << resumes.getSize() << endl << endl;
 
         auto start = chrono::high_resolution_clock::now();
 
-        Node* resPtr = resumeList.getHead();
-        int resumeIndex = 0;
-        int totalMatches = jobList.getSize() * resumeList.getSize();
-        LMatch* matches = new LMatch[totalMatches];
-        int count = 0;
+        struct Match {
+            int resumeIndex;
+            int jobIndex;
+            int score;
+        } matches[40000];
 
-        while (resPtr) {
-            Node* jobPtr = jobList.getHead();
-            int jobIndex = 0;
-            while (jobPtr) {
-                int score = getMatchScore(jobPtr->description, resPtr->description);
-                matches[count++] = {resumeIndex, jobIndex, score};
-                jobPtr = jobPtr->next;
-                jobIndex++;
+        int matchCount = 0;
+
+        for (int i = 0; i < resumes.getSize(); i++) {
+            for (int j = 0; j < jobs.getSize(); j++) {
+                int score = getMatchScore(jobs.get(j), resumes.get(i));
+                if (score > 0 && matchCount < 40000) {
+                    matches[matchCount++] = { i, j, score };
+                }
             }
-            resPtr = resPtr->next;
-            resumeIndex++;
         }
 
-        sortMatches(matches, count);
+        // Bubble sort
+        for (int i = 0; i < matchCount - 1; i++) {
+            for (int j = 0; j < matchCount - i - 1; j++) {
+                if (matches[j].score < matches[j + 1].score) {
+                    Match temp = matches[j];
+                    matches[j] = matches[j + 1];
+                    matches[j + 1] = temp;
+                }
+            }
+        }
 
         auto end = chrono::high_resolution_clock::now();
-        auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+        chrono::duration<double, milli> execTime = end - start;
 
-        cout << "\nTop 20 Linked List–Based Matches:\n";
+        cout << "Top 20 Linked List–Based Matches:\n";
         cout << "------------------------------\n";
-        for (int i = 0; i < 20 && i < count; i++) {
+        for (int i = 0; i < 20 && i < matchCount; i++) {
             cout << i + 1 << ". Resume #" << matches[i].resumeIndex + 1
-                << " <-> Job #" << matches[i].jobIndex + 1
-                << " | Score: " << matches[i].score << endl;
+                 << " <-> Job #" << matches[i].jobIndex + 1
+                 << " | Score: " << matches[i].score << endl;
         }
-        cout << "------------------------------\n";
-        cout << "Execution Time (Linked List): " << duration.count() << " ms\n";
-        cout << "------------------------------\n";
 
-        delete[] matches;
+        cout << "------------------------------\n";
+        cout << "Execution Time (Linked List): " << execTime.count() << " ms\n";
+        cout << "------------------------------\n\n";
     }
 };

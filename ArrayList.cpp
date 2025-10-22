@@ -3,56 +3,18 @@
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <cctype>
 using namespace std;
 
-struct Match {
-    int resumeIndex;
-    int jobIndex;
-    int score;
-};
+#define MAX_RECORDS 200
+#define MAX_WORDS 200
+#define MAX_WORD_LENGTH 50
 
 class ArrayList {
 private:
     string* data;
     int capacity;
     int size;
-
-    void expandCapacity() {
-        int newCapacity = capacity * 2;
-        string* newData = new string[newCapacity];
-        for (int i = 0; i < size; i++)
-            newData[i] = data[i];
-        delete[] data;
-        data = newData;
-        capacity = newCapacity;
-        cout << "[Info] ArrayList expanded to capacity: " << capacity << endl;
-    }
-
-    int getMatchScore(const string& job, const string& resume) {
-        int score = 0;
-        stringstream ss(resume);
-        string word;
-        while (ss >> word) {
-            string jobLower = job, wordLower = word;
-            for (auto &c : jobLower) c = tolower(c);
-            for (auto &c : wordLower) c = tolower(c);
-            if (jobLower.find(wordLower) != string::npos)
-                score++;
-        }
-        return score;
-    }
-
-    void sortMatches(Match arr[], int n) {
-        for (int i = 0; i < n - 1; i++) {
-            for (int j = 0; j < n - i - 1; j++) {
-                if (arr[j].score < arr[j + 1].score) {
-                    Match temp = arr[j];
-                    arr[j] = arr[j + 1];
-                    arr[j + 1] = temp;
-                }
-            }
-        }
-    }
 
 public:
     ArrayList(int cap = 500) {
@@ -66,82 +28,133 @@ public:
     }
 
     void insert(const string& value) {
-        if (size >= capacity)
-            expandCapacity();
+        if (size >= capacity) {
+            int newCap = capacity * 2;
+            string* newData = new string[newCap];
+            for (int i = 0; i < size; i++) newData[i] = data[i];
+            delete[] data;
+            data = newData;
+            capacity = newCap;
+        }
         data[size++] = value;
     }
 
     string get(int index) const {
-        if (index >= 0 && index < size)
-            return data[index];
-        else
-            return "";
+        if (index >= 0 && index < size) return data[index];
+        return "";
     }
 
-    int getSize() const {
-        return size;
+    int getSize() const { return size; }
+
+    // Convert string to lowercase (manual)
+    string toLowercase(const string& str) {
+        string result = str;
+        for (int i = 0; result[i]; i++)
+            result[i] = tolower(result[i]);
+        return result;
     }
 
-    void display(int limit = 10) const {
-        for (int i = 0; i < size && i < limit; i++)
-            cout << "[" << i + 1 << "] " << data[i] << endl;
-        cout << "Total Records: " << size << endl;
+    // Tokenize string into words array
+    int tokenize(const string& text, string words[MAX_WORDS]) {
+        string word = "";
+        int count = 0;
+        for (int i = 0; i <= text.length(); i++) {
+            char c = text[i];
+            if (isalnum(c)) word += tolower(c);
+            else if (!word.empty()) {
+                words[count++] = word;
+                word = "";
+                if (count >= MAX_WORDS) break;
+            }
+        }
+        if (!word.empty() && count < MAX_WORDS) words[count++] = word;
+        return count;
     }
 
-    // ========== Matching Logic ==========
-    void runMatching(const string& jobFilePath, const string& resumeFilePath, int maxRecords = 200) {
-        cout << "\n==============================\n";
+    // Optimized keyword-based score
+    int getMatchScore(const string& job, const string& resume) {
+        string jobWords[MAX_WORDS];
+        string resumeWords[MAX_WORDS];
+        int jobCount = tokenize(job, jobWords);
+        int resCount = tokenize(resume, resumeWords);
+
+        int score = 0;
+        for (int i = 0; i < resCount; i++) {
+            for (int j = 0; j < jobCount; j++) {
+                if (resumeWords[i] == jobWords[j]) score++;
+            }
+        }
+        return score;
+    }
+
+    // Matching process for array-based version
+    void runMatching() {
+        cout << "==============================\n";
         cout << "ARRAY-BASED MATCHING STARTED\n";
         cout << "==============================\n";
 
-        ArrayList jobs(500);
-        ArrayList resumes(500);
-        string line;
+        ArrayList jobs;
+        ArrayList resumes;
 
-        ifstream jobFile(jobFilePath);
-        while (getline(jobFile, line) && jobs.getSize() < maxRecords) {
-            if (!line.empty()) jobs.insert(line);
+        ifstream jobFile("job_description.csv");
+        string line;
+        while (getline(jobFile, line) && jobs.getSize() < MAX_RECORDS) {
+            if (!line.empty()) jobs.insert(toLowercase(line));
         }
         jobFile.close();
 
-        ifstream resumeFile(resumeFilePath);
-        while (getline(resumeFile, line) && resumes.getSize() < maxRecords) {
-            if (!line.empty()) resumes.insert(line);
+        ifstream resumeFile("resume.csv");
+        while (getline(resumeFile, line) && resumes.getSize() < MAX_RECORDS) {
+            if (!line.empty()) resumes.insert(toLowercase(line));
         }
         resumeFile.close();
 
         cout << "Jobs loaded: " << jobs.getSize() << endl;
-        cout << "Resumes loaded: " << resumes.getSize() << endl;
+        cout << "Resumes loaded: " << resumes.getSize() << endl << endl;
 
         auto start = chrono::high_resolution_clock::now();
 
-        int totalMatches = jobs.getSize() * resumes.getSize();
-        Match* matches = new Match[totalMatches];
-        int count = 0;
+        struct Match {
+            int resumeIndex;
+            int jobIndex;
+            int score;
+        } matches[40000];
+
+        int matchCount = 0;
 
         for (int i = 0; i < resumes.getSize(); i++) {
             for (int j = 0; j < jobs.getSize(); j++) {
                 int score = getMatchScore(jobs.get(j), resumes.get(i));
-                matches[count++] = {i, j, score};
+                if (score > 0 && matchCount < 40000) {
+                    matches[matchCount++] = { i, j, score };
+                }
             }
         }
 
-        sortMatches(matches, count);
+        // Simple bubble sort (descending)
+        for (int i = 0; i < matchCount - 1; i++) {
+            for (int j = 0; j < matchCount - i - 1; j++) {
+                if (matches[j].score < matches[j + 1].score) {
+                    Match temp = matches[j];
+                    matches[j] = matches[j + 1];
+                    matches[j + 1] = temp;
+                }
+            }
+        }
 
         auto end = chrono::high_resolution_clock::now();
-        auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+        chrono::duration<double, milli> execTime = end - start;
 
-        cout << "\nTop 20 Array-Based Matches:\n";
+        cout << "Top 20 Array-Based Matches:\n";
         cout << "------------------------------\n";
-        for (int i = 0; i < 20 && i < count; i++) {
+        for (int i = 0; i < 20 && i < matchCount; i++) {
             cout << i + 1 << ". Resume #" << matches[i].resumeIndex + 1
-                << " <-> Job #" << matches[i].jobIndex + 1
-                << " | Score: " << matches[i].score << endl;
+                 << " <-> Job #" << matches[i].jobIndex + 1
+                 << " | Score: " << matches[i].score << endl;
         }
-        cout << "------------------------------\n";
-        cout << "Execution Time (Array): " << duration.count() << " ms\n";
-        cout << "------------------------------\n";
 
-        delete[] matches;
+        cout << "------------------------------\n";
+        cout << "Execution Time (Array): " << execTime.count() << " ms\n";
+        cout << "------------------------------\n\n";
     }
 };
